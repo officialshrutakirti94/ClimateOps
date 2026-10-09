@@ -65,6 +65,7 @@ app = FastAPI(
     title="ClimateOps API",
     description="Climate Intelligence & Emergency Response Platform",
     version="0.1.0",
+    root_path="/api",
     docs_url="/docs" if settings.APP_DEBUG else None,
     redoc_url="/redoc" if settings.APP_DEBUG else None,
     openapi_url="/openapi.json" if settings.APP_DEBUG else None,
