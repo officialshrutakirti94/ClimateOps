@@ -188,6 +188,51 @@ class TestClimateAPI:
         explain.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_climate_chat_uses_live_location_context_and_temporary_history(
+        self,
+        async_client,
+        mock_location,
+        mock_observation,
+        mock_risk_assessment,
+        monkeypatch,
+    ):
+        from app.config import settings
+
+        location_service = AsyncMock()
+        location_service.get_location.return_value = mock_location
+        weather_service = AsyncMock()
+        weather_service.get_latest_observation.return_value = mock_observation
+        weather_service.get_latest_risk_assessment.return_value = (
+            mock_risk_assessment.model_dump(mode="json")
+        )
+        app.dependency_overrides[location_service_dependency] = lambda: location_service
+        app.dependency_overrides[weather_service_dependency] = lambda: weather_service
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "test-key")
+        messages = [
+            {"role": "user", "content": "What is the heat risk?"},
+            {"role": "assistant", "content": "It is 45%."},
+            {"role": "user", "content": "What does that mean for residents?"},
+        ]
+
+        with patch(
+            "app.api.routes.climate.groq_client.chat",
+            new_callable=AsyncMock,
+            return_value="Stay hydrated and follow local heat advisories.",
+        ) as chat:
+            response = await async_client.post(
+                "/api/climate/TEST-001/chat",
+                json={"messages": messages},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["reply"] == "Stay hydrated and follow local heat advisories."
+        context, sent_messages = chat.await_args.args
+        assert context["location"]["name"] == "Test City, Test District, Test State, India"
+        assert context["risk_assessment"]["heatRisk"] == 45
+        assert context["latest_observation"]["weather"]["temperature"] == 30.0
+        assert sent_messages == messages
+
+    @pytest.mark.asyncio
     async def test_explain_incident_returns_prioritized_actions(
         self,
         async_client,
@@ -245,6 +290,62 @@ class TestClimateAPI:
             "Risk increases if dry conditions persist"
         ]
         explain.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_incident_chat_includes_incident_and_current_weather_context(
+        self,
+        async_client,
+        mock_location,
+        mock_observation,
+        mock_risk_assessment,
+        monkeypatch,
+    ):
+        from app.config import settings
+
+        incident = Incident(
+            incidentId="INC-CHAT001",
+            locationId="TEST-001",
+            type=IncidentType.DROUGHT,
+            severity=IncidentSeverity.WARNING,
+            status=IncidentStatus.WARNING,
+            riskScore=35,
+            source="openweather",
+            createdAt=datetime.utcnow(),
+            lastUpdated=datetime.utcnow(),
+        )
+        incidents_repo = AsyncMock()
+        incidents_repo.get_by_id.return_value = incident.model_dump(mode="json")
+        location_service = AsyncMock()
+        location_service.get_location.return_value = mock_location
+        weather_service = AsyncMock()
+        weather_service.get_latest_observation.return_value = mock_observation
+        weather_service.get_latest_risk_assessment.return_value = (
+            mock_risk_assessment.model_dump(mode="json")
+        )
+        app.dependency_overrides[incidents_repo_dependency] = lambda: incidents_repo
+        app.dependency_overrides[location_service_dependency] = lambda: location_service
+        app.dependency_overrides[weather_service_dependency] = lambda: weather_service
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "test-key")
+        messages = [{"role": "user", "content": "What should I monitor next?"}]
+
+        with patch(
+            "app.api.routes.incidents.groq_client.chat",
+            new_callable=AsyncMock,
+            return_value="Monitor rainfall and local water notices.",
+        ) as chat:
+            response = await async_client.post(
+                "/api/incidents/INC-CHAT001/chat",
+                json={"messages": messages},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["reply"] == "Monitor rainfall and local water notices."
+        context, sent_messages = chat.await_args.args
+        assert context["incident"]["type"] == "DROUGHT"
+        assert context["incident"]["risk_score"] == 35
+        assert context["risk_assessment"]["heatRisk"] == 45
+        assert context["latest_observation"]["weather"]["temperature"] == 30.0
+        assert sent_messages == messages
 
     @pytest.mark.asyncio
     async def test_get_climate_risk_not_found(self, async_client):

@@ -121,6 +121,14 @@ export interface IncidentSummaryResponse {
   high_risk_count: number;
 }
 
+export interface MonitoringTriggerResponse {
+  locations_checked: number;
+  incidents_created: number;
+  incidents_updated: number;
+  incidents_resolved: number;
+  errors?: Array<{ locationId: string; message: string }>;
+}
+
 export interface SimulationParams {
   temperature_change?: number;
   humidity_change?: number;
@@ -165,6 +173,15 @@ export interface IncidentAIExplanation {
   immediate_actions: string[];
   monitoring_priorities: string[];
   escalation_scenarios: string[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
 }
 
 export interface SimulationAIExplanation {

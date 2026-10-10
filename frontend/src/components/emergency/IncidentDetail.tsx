@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RiskGauge } from '@/components/climate/RiskGauge';
 import { AIInsight } from '@/components/climate/AIInsight';
+import { ContextChat } from '@/components/climate/ContextChat';
 import { AlertTriangle, Clock, MapPin, Droplets, Thermometer, Sun, CloudRain } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
@@ -277,6 +278,18 @@ export function IncidentDetail({
                   </ul>
                 </Card>
               )}
+              <ContextChat
+                key={incident.incidentId}
+                className="mt-4"
+                title="Ask about this incident"
+                description="Discuss the current incident, response options, and what could change its risk."
+                suggestions={[
+                  'What should responders prioritize first?',
+                  'What could make this incident worse?',
+                  'How will we know the risk is improving?',
+                ]}
+                onSend={async (messages) => (await api.chatAboutIncident(incident.incidentId, messages)).reply}
+              />
             </motion.div>
           )}
 

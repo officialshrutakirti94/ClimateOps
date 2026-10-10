@@ -1,10 +1,10 @@
 import re
-from datetime import datetime, timedelta, timezone
-from typing import List
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ValidationError, field_validator
 
+from app.api.chat_context import build_observation_context
 from app.api.deps import (
     get_incidents_repo,
     get_location_service,
@@ -21,6 +21,7 @@ from app.database.models import (
     IncidentType,
     RiskAssessment,
 )
+from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.incidents import (
     IncidentResponse,
     IncidentSummaryResponse,
@@ -35,10 +36,10 @@ router = APIRouter()
 
 class IncidentAIExplanationResponse(BaseModel):
     why_emergency: str
-    key_factors: List[str]
-    immediate_actions: List[str]
-    monitoring_priorities: List[str]
-    escalation_scenarios: List[str]
+    key_factors: list[str]
+    immediate_actions: list[str]
+    monitoring_priorities: list[str]
+    escalation_scenarios: list[str]
 
     @field_validator(
         "key_factors",
@@ -65,7 +66,7 @@ DEMO_SCENARIOS = (
 )
 
 
-@router.get("/active", response_model=List[IncidentResponse])
+@router.get("/active", response_model=list[IncidentResponse])
 async def get_active_incidents(
     incidents_repo: IncidentsRepository = Depends(get_incidents_repo),
 ):
@@ -73,7 +74,7 @@ async def get_active_incidents(
     return [IncidentResponse(**inc) for inc in incidents]
 
 
-@router.get("/demo-preview", response_model=List[IncidentResponse])
+@router.get("/demo-preview", response_model=list[IncidentResponse])
 async def get_demo_incidents(
     location_service: LocationService = Depends(get_location_service),
 ):
@@ -88,7 +89,7 @@ async def get_demo_incidents(
         for name in (location.city, location.district, location.state)
         if name
     }
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     incidents = []
 
     for index, (place_name, incident_type, severity, risk_score) in enumerate(DEMO_SCENARIOS):
@@ -190,6 +191,75 @@ async def explain_incident(
         raise HTTPException(
             status_code=502,
             detail="AI incident analysis is temporarily unavailable.",
+        ) from exc
+
+
+@router.post("/{incident_id}/chat", response_model=ChatResponse)
+async def chat_about_incident(
+    request: ChatRequest,
+    incident_id: str = Path(..., description="Incident ID"),
+    incidents_repo: IncidentsRepository = Depends(get_incidents_repo),
+    location_service: LocationService = Depends(get_location_service),
+    weather_service: WeatherService = Depends(get_weather_service),
+):
+    incident_data = await incidents_repo.get_by_id(incident_id)
+    if not incident_data:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if not settings.GROQ_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Incident chat is not configured on the backend.",
+        )
+
+    incident = Incident(**incident_data)
+    location = await location_service.get_location(incident.locationId)
+    if not location:
+        raise HTTPException(status_code=404, detail="Incident location not found")
+
+    assessment_data = await weather_service.get_latest_risk_assessment(incident.locationId)
+    if not assessment_data:
+        raise HTTPException(
+            status_code=503,
+            detail="A current climate risk assessment is not available for this incident.",
+        )
+
+    observation = await weather_service.get_latest_observation(incident.locationId)
+    location_name = ", ".join(
+        value
+        for value in (location.city, location.district, location.state, location.country)
+        if value
+    )
+    context = {
+        "location": {
+            "id": location.locationId,
+            "name": location_name or incident.locationId,
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+        },
+        "incident": {
+            "id": incident.incidentId,
+            "type": incident.type.value,
+            "severity": incident.severity.value,
+            "status": incident.status.value,
+            "risk_score": incident.riskScore,
+            "source": incident.source,
+            "created_at": incident.createdAt.isoformat(),
+            "last_updated": incident.lastUpdated.isoformat(),
+        },
+        "risk_assessment": RiskAssessment(**assessment_data).model_dump(mode="json"),
+        "latest_observation": build_observation_context(observation),
+    }
+
+    try:
+        reply = await groq_client.chat(
+            context,
+            [message.model_dump() for message in request.messages],
+        )
+        return ChatResponse(reply=reply)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Incident chat is temporarily unavailable.",
         ) from exc
 
 

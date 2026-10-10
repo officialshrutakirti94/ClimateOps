@@ -87,7 +87,7 @@ def test_no_emergency_low_risk():
     obs = EnvironmentalObservation(
         locationId="TEST-SAFE",
         timestamp=datetime.utcnow(),
-        weather=WeatherData(temperature=25.0, humidity=50, rainfall=10, windSpeed=5, pressure=1010),
+        weather=WeatherData(temperature=25.0, humidity=50, rainfall=25, windSpeed=5, pressure=1010),
         water=WaterData(riverLevel=20.0, riverLevelTrend="STABLE"),
         alerts=[],
         source="test",
@@ -129,7 +129,7 @@ def test_percentage_risk_at_threshold_creates_incident_without_extra_confirmatio
         "waterStressSeverity": RiskLevel.LOW,
         "droughtSeverity": RiskLevel.LOW,
     }
-    risk_values[risk_field] = 30
+    risk_values[risk_field] = 20
     assessment = RiskAssessment(**risk_values)
 
     detections = run_emergency_detection(assessment, observation, [])
@@ -137,7 +137,10 @@ def test_percentage_risk_at_threshold_creates_incident_without_extra_confirmatio
     assert [detection.incident_type for detection in detections] == [incident_type]
     assert detections[0].should_create_incident is True
     assert detections[0].severity == IncidentSeverity.WARNING
-    assert detections[0].risk_score == 30
+    assert detections[0].risk_score == 20
+
+    risk_values[risk_field] = 19
+    assert run_emergency_detection(RiskAssessment(**risk_values), observation, []) == []
 
 
 @pytest.mark.parametrize(
@@ -149,7 +152,7 @@ def test_percentage_risk_at_threshold_creates_incident_without_extra_confirmatio
         (IncidentType.DROUGHT, "droughtRisk"),
     ],
 )
-def test_percentage_risk_incident_remains_active_at_30_and_resolves_below(
+def test_percentage_risk_incident_remains_active_at_20_and_resolves_below(
     incident_type, risk_field
 ):
     from app.core.emergency_engine import check_incident_resolution
@@ -160,7 +163,7 @@ def test_percentage_risk_incident_remains_active_at_30_and_resolves_below(
         type=incident_type,
         severity=IncidentSeverity.WARNING,
         status=IncidentStatus.WARNING,
-        riskScore=35,
+        riskScore=25,
         source="test",
         createdAt=datetime.utcnow(),
         lastUpdated=datetime.utcnow(),
@@ -177,10 +180,10 @@ def test_percentage_risk_incident_remains_active_at_30_and_resolves_below(
         "waterStressSeverity": RiskLevel.LOW,
         "droughtSeverity": RiskLevel.LOW,
     }
-    risk_values[risk_field] = 35
+    risk_values[risk_field] = 25
     assert check_incident_resolution(incident, RiskAssessment(**risk_values)) is False
 
-    risk_values[risk_field] = 29
+    risk_values[risk_field] = 19
     assert check_incident_resolution(incident, RiskAssessment(**risk_values)) is True
 
 
@@ -267,6 +270,9 @@ def test_check_incident_resolution():
         droughtSeverity=RiskLevel.LOW,
     )
 
+    assert check_incident_resolution(incident, low_risk_assessment) is False
+
+    low_risk_assessment.heatRisk = 19
     assert check_incident_resolution(incident, low_risk_assessment) is True
 
     resolved = resolve_incident(incident)
@@ -300,4 +306,7 @@ def test_flood_resolution_threshold():
         droughtSeverity=RiskLevel.LOW,
     )
 
+    assert check_incident_resolution(incident, assessment) is False
+
+    assessment.floodRisk = 19
     assert check_incident_resolution(incident, assessment) is True

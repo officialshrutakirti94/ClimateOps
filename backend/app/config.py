@@ -19,8 +19,15 @@ class Settings(BaseSettings):
     APP_DEBUG: bool = Field(default=True)
     APP_HOST: str = Field(default="0.0.0.0")
     APP_PORT: int = Field(default=8000)
+    ROOT_PATH: Optional[str] = Field(default=None)
     SECRET_KEY: str = Field(min_length=32)
     CORS_ORIGINS: str = Field(default="http://localhost:3000,http://localhost:5173")
+
+    @property
+    def asgi_root_path(self) -> str:
+        if self.ROOT_PATH is not None:
+            return self.ROOT_PATH
+        return "" if self.is_development() else "/api"
 
     @property
     def cors_origins_list(self) -> List[str]:

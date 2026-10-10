@@ -7,6 +7,7 @@ import { SearchAutocomplete } from '@/components/climate/SearchAutocomplete';
 import { RiskGauge } from '@/components/climate/RiskGauge';
 import { RiskBadge } from '@/components/climate/RiskBadge';
 import { AIInsight } from '@/components/climate/AIInsight';
+import { ContextChat } from '@/components/climate/ContextChat';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SimulationDrawer } from '@/components/simulation/SimulationDrawer';
@@ -277,6 +278,25 @@ export default function ClimateDetailPage() {
             isLoading={aiLoading}
             error={aiError}
             onRegenerate={() => generateAIInsight(locationId)}
+          />
+        </motion.section>
+
+        <motion.section
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <ContextChat
+            key={locationId}
+            title={`Ask about ${location.city || location.district || 'this place'}`}
+            description="Get contextual answers about local weather, climate risks, and practical preparation."
+            suggestions={[
+              'What does the highest risk score mean?',
+              'What should I watch over the next few days?',
+              'What practical steps can residents take?',
+            ]}
+            onSend={async (messages) => (await api.chatAboutClimate(locationId, messages)).reply}
           />
         </motion.section>
 

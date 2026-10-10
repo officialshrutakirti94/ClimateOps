@@ -15,10 +15,10 @@ from app.database.models import (
 
 @dataclass
 class EmergencyThresholds:
-    heat_risk_minimum: int = 30
-    flood_risk_minimum: int = 30
-    water_stress_risk_minimum: int = 30
-    drought_risk_minimum: int = 30
+    heat_risk_minimum: int = 20
+    flood_risk_minimum: int = 20
+    water_stress_risk_minimum: int = 20
+    drought_risk_minimum: int = 20
 
 
 DEFAULT_EMERGENCY_THRESHOLDS = EmergencyThresholds()

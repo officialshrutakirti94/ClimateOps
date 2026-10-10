@@ -1,5 +1,5 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI
@@ -65,7 +65,7 @@ app = FastAPI(
     title="ClimateOps API",
     description="Climate Intelligence & Emergency Response Platform",
     version="0.1.0",
-    root_path="/api",
+    root_path=settings.asgi_root_path,
     docs_url="/docs" if settings.APP_DEBUG else None,
     redoc_url="/redoc" if settings.APP_DEBUG else None,
     openapi_url="/openapi.json" if settings.APP_DEBUG else None,

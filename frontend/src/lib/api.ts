@@ -1,9 +1,12 @@
 import type {
   ClimateRiskResponse,
   AIExplanation,
+  ChatMessage,
+  ChatResponse,
   EnvironmentalObservation,
   Incident,
   IncidentAIExplanation,
+  MonitoringTriggerResponse,
   IncidentSummaryResponse,
   IncidentTimelineResponse,
   Location,
@@ -44,6 +47,12 @@ export const api = {
   explainClimateRisk: (locationId: string) =>
     fetchJson<AIExplanation>(`/api/climate/${locationId}/explain`, { method: 'POST' }),
 
+  chatAboutClimate: (locationId: string, messages: ChatMessage[]) =>
+    fetchJson<ChatResponse>(`/api/climate/${locationId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
+
   getClimateHistory: (locationId: string, hours = 24) =>
     fetchJson<{ locationId: string; hours: number; observations: EnvironmentalObservation[] }>(
       `/api/climate/${locationId}/history?hours=${hours}`
@@ -75,6 +84,12 @@ export const api = {
   explainIncident: (incidentId: string) =>
     fetchJson<IncidentAIExplanation>(`/api/incidents/${incidentId}/explain`, { method: 'POST' }),
 
+  chatAboutIncident: (incidentId: string, messages: ChatMessage[]) =>
+    fetchJson<ChatResponse>(`/api/incidents/${incidentId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
+
   getIncidentTimeline: (incidentId: string) =>
     fetchJson<IncidentTimelineResponse>(`/api/incidents/${incidentId}/timeline`),
 
@@ -94,7 +109,7 @@ export const api = {
     ),
 
   triggerMonitoring: () =>
-    fetchJson<{ locations_checked: number; incidents_created: number; incidents_updated: number; incidents_resolved: number }>(
+    fetchJson<MonitoringTriggerResponse>(
       `/api/monitoring/trigger`,
       { method: 'POST' }
     ),

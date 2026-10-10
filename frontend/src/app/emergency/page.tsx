@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { EmergencyMap } from '@/components/maps/EmergencyMap';
@@ -9,7 +9,7 @@ import { IncidentDetail } from '@/components/emergency/IncidentDetail';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Search, Filter, RefreshCw, Wifi, WifiOff, MapPin, AlertTriangle, Clock, TrendingUp, ChevronLeft, ChevronRight, FlaskConical } from 'lucide-react';
+import { Search, Filter, RefreshCw, Wifi, WifiOff, MapPin, AlertTriangle, Clock, TrendingUp, ChevronLeft, ChevronRight, FlaskConical, ScanLine } from 'lucide-react';
 import { useIncidentStore, useLocationStore, useUIStore } from '@/store';
 import { api } from '@/lib/api';
 import type { Incident, IncidentObservation, IncidentSummaryResponse } from '@/types';
@@ -38,7 +38,9 @@ export default function EmergencyPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null);
   const [demoIncidents, setDemoIncidents] = useState<Incident[]>([]);
   const [showDemoPreview, setShowDemoPreview] = useState(false);
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
@@ -48,6 +50,7 @@ export default function EmergencyPage() {
   const [typeFilter, setTypeFilter] = useState<'ALL' | Incident['type']>('ALL');
   const [severityFilter, setSeverityFilter] = useState<'ALL' | Incident['severity']>('ALL');
   const [showMap, setShowMap] = useState(true);
+  const hasScannedOnEntry = useRef(false);
 
   // WebSocket connection
   useEffect(() => {
@@ -159,11 +162,49 @@ export default function EmergencyPage() {
     }
   }, [setIncidents, setSummary, setMonitoredLocations]);
 
+  const scanForRiskNow = useCallback(async () => {
+    setIsScanning(true);
+    setScanFeedback(null);
+    setDataError(null);
+    try {
+      const result = await api.triggerMonitoring();
+      await fetchInitialData();
+      const feedback = [
+        `Scanned ${result.locations_checked} locations`,
+        `${result.incidents_created} new warning${result.incidents_created === 1 ? '' : 's'}`,
+        `${result.incidents_updated} updated`,
+        `${result.incidents_resolved} resolved`,
+      ].join(' · ');
+      if (result.errors?.length) {
+        setScanFeedback(
+          `${feedback}. ${result.errors.length} location${result.errors.length === 1 ? '' : 's'} could not be checked; results may be incomplete.`,
+        );
+      } else if (result.incidents_created === 0 && result.incidents_updated === 0) {
+        setScanFeedback(`${feedback}. No current risk at or above the 20% watch threshold was detected.`);
+      } else {
+        setScanFeedback(`${feedback}. Risk watches are shown below.`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to scan monitored locations.';
+      setDataError(message);
+    } finally {
+      setIsScanning(false);
+    }
+  }, [fetchInitialData]);
+
   useEffect(() => {
-    fetchInitialData();
+    const initializeCommandCenter = async () => {
+      await fetchInitialData();
+      if (!hasScannedOnEntry.current) {
+        hasScannedOnEntry.current = true;
+        void scanForRiskNow();
+      }
+    };
+
+    void initializeCommandCenter();
     const interval = setInterval(fetchInitialData, 30000); // Refresh every 30s
     return () => clearInterval(interval);
-  }, [fetchInitialData]);
+  }, [fetchInitialData, scanForRiskNow]);
 
   // Filter incidents
   const filteredIncidents = activeIncidents.filter((incident) => {
@@ -255,8 +296,7 @@ export default function EmergencyPage() {
                 {monitoringActive ? 'Monitoring active' : 'Monitoring paused'}
                 {' · '}
                 {isConnected ? 'Live connection connected' : 'Live connection reconnecting'}
-                {' · '}
-                {monitoredLocations.filter((location) => location.monitoringEnabled).length} locations
+                {' · '}20%+ risk watch
               </p>
             </div>
           </div>
@@ -280,6 +320,16 @@ export default function EmergencyPage() {
             </div>
 
             <div className="flex items-center gap-2 ml-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={scanForRiskNow}
+                disabled={isScanning}
+                aria-label="Scan monitored Indian cities for risk at or above 20 percent"
+              >
+                <ScanLine className={cn('w-4 h-4', isScanning && 'animate-pulse')} />
+                {isScanning ? 'Scanning cities…' : 'Scan now'}
+              </Button>
               <Button
                 variant={showDemoPreview ? 'secondary' : 'ghost'}
                 size="sm"
@@ -354,6 +404,14 @@ export default function EmergencyPage() {
               Retry
             </Button>
           </div>
+        </div>
+      )}
+
+      {scanFeedback && (
+        <div className="container mt-3" role="status">
+          <p className="rounded-organic-sm border border-theme-accent/20 bg-theme-accent/5 px-4 py-3 text-sm text-theme-text-secondary">
+            {scanFeedback}
+          </p>
         </div>
       )}
 
