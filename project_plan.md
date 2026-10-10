@@ -20,6 +20,21 @@ The track focuses on:
 
 # 2. Project
 
+## Documentation and Governance Roadmap
+
+The project maintains these non-code references alongside implementation work:
+
+- `CONTRIBUTING.md` for branches, reviews, documentation, and contribution expectations.
+- `SECURITY.md` for private vulnerability reporting and security practices.
+- `.github/` templates for consistent bug reports, feature requests, and pull requests.
+- `docs/data-sources.md` for provider ownership, freshness, licensing, and quality requirements.
+- `docs/user-flows.md` for intended user journeys and accessibility expectations.
+- `docs/architecture.md` for system boundaries and data-flow principles.
+- `docs/manual-qa.md` for repeatable release and regression checks.
+- `docs/risk-and-safety.md` for uncertainty, emergency guidance, privacy, and safety review.
+
+Review documentation whenever a data source, risk threshold, alert, user flow, operational process, or public-facing limitation changes.
+
 ## ClimateOps — Climate Intelligence & Emergency Response
 
 ClimateOps is an AI-powered platform that turns environmental data into **risk intelligence, preventive decisions, and live emergency monitoring**.
